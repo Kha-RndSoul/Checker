@@ -32,17 +32,35 @@ public class GameController {
 
     private void handleClick(int row, int col) {
         if (model.getStatus() != GameModel.Status.PLAYING) return;
-        // Bỏ qua click khi đến lượt AI
-        if (model.getMode()==GameModel.Mode.PV_AI && !model.isRedTurn()) return;
+        if (model.getMode() == GameModel.Mode.PV_AI && !model.isRedTurn()) return;
 
-        // Nếu đã chọn quân → thử di chuyển
         if (model.getSelected() != null) {
             boolean moved = model.moveTo(row, col);
             frame.refresh(model);
             if (moved) { checkGameOver(); scheduleAI(); return; }
         }
-        // Chọn quân mới
-        model.select(row, col);
+
+        boolean success = model.select(row, col);
+
+        // Phát triển tiếp - MSSV:23130141 - Họ tên: Nguyễn Tuấn Kha
+        // Nâng cấp UC04: Xử lý luồng ngoại lệ - Phản hồi trực quan khi chọn sai quân trong thế bắt buộc ăn
+        if (!success) {
+            Model.Piece p = model.getBoard().get(row, col);
+            if (p != null && p.isRed() == model.isRedTurn()) {
+
+                java.util.List<Model.Move> allMoves = model.getBoard().validMoves(model.isRedTurn());
+                boolean hasCapture = allMoves.stream().anyMatch(Model.Move::isCapture);
+
+                if (hasCapture) {
+                    // Hiển thị hộp thoại cảnh báo người chơi
+                    JOptionPane.showMessageDialog(frame,
+                            "Bạn không thể chọn quân này! Bắt buộc phải thực hiện nước ăn quân.",
+                            "Chọn quân sai luật",
+                            JOptionPane.WARNING_MESSAGE);
+                }
+            }
+        }
+
         frame.refresh(model);
     }
 

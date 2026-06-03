@@ -80,9 +80,10 @@ public class GameController {
         GameModel.Status st = model.getStatus();
         if (st == GameModel.Status.PLAYING) return;
         String winner = (st == GameModel.Status.RED_WINS) ? "ĐỎ 🔴" : "ĐEN ⚫";
+        String stats = buildStatsMessage();
         Timer t = new Timer(300, e -> {
             int opt = JOptionPane.showOptionDialog(frame,
-                    winner + " thắng!\nBạn muốn chơi tiếp?",
+                    winner + " thắng!\n\n" + stats + "\nBạn muốn chơi tiếp?",
                     "Kết thúc ván", JOptionPane.YES_NO_OPTION,
                     JOptionPane.INFORMATION_MESSAGE, null,
                     new String[]{"Chơi lại", "Menu"}, "Chơi lại");
@@ -90,5 +91,16 @@ public class GameController {
             else frame.showMenu();
         });
         t.setRepeats(false); t.start();
+    }
+    private String buildStatsMessage() {
+        return "─────────────────────────────\n"
+                + "  📊 THỐNG KÊ VÁN ĐẤU\n"
+                + "─────────────────────────────\n"
+                + String.format("  ⏱  Thời gian    : %s%n", model.getElapsedTime())
+                + String.format("  🔴 Đỏ  — Nước đi: %d  |  Quân ăn: %d%n",
+                model.getRedMoves(), model.getRedCaptures())
+                + String.format("  ⚫ Đen — Nước đi: %d  |  Quân ăn: %d%n",
+                model.getBlackMoves(), model.getBlackCaptures())
+                + "─────────────────────────────\n";
     }
 }

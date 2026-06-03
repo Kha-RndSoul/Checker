@@ -16,6 +16,11 @@ public class GameModel {
     private Piece  selected;
     private List<Move> selMoves = new ArrayList<>();
     private AIPlayer ai;
+    private int redMoves;
+    private int blackMoves;
+    private int redCaptures;
+    private int blackCaptures;
+    private long startTime;
 
     public void newGame(Mode mode, Diff diff) {
         this.mode   = mode;
@@ -26,6 +31,11 @@ public class GameModel {
         this.selected = null;
         this.selMoves = new ArrayList<>();
         this.ai = (mode == Mode.PV_AI) ? new AIPlayer(diff) : null;
+        this.redMoves      = 0;
+        this.blackMoves    = 0;
+        this.redCaptures   = 0;
+        this.blackCaptures = 0;
+        this.startTime     = System.currentTimeMillis();
     }
 
     /** Chọn quân tại (r,c). Trả về true nếu chọn được. */
@@ -47,6 +57,14 @@ public class GameModel {
     }
 
     public void applyMove(Move m) {
+        int captured = m.getCaptures().size();
+        if (redTurn) {
+            redMoves++;
+            redCaptures += captured;
+        } else {
+            blackMoves++;
+            blackCaptures += captured;
+        }
         board.applyMove(m);
         clearSelection();
         redTurn = !redTurn;
@@ -61,6 +79,18 @@ public class GameModel {
     public void clearSelection() { selected=null; selMoves=new ArrayList<>(); }
 
     public Move getAIMove() { return (ai!=null) ? ai.best(board, redTurn) : null; }
+    // ── UC12: Getters thống kê ────────────────────────────────────────
+    public int getRedMoves()      { return redMoves; }
+    public int getBlackMoves()    { return blackMoves; }
+    public int getRedCaptures()   { return redCaptures; }
+    public int getBlackCaptures() { return blackCaptures; }
+
+    public String getElapsedTime() {
+        long elapsed = (System.currentTimeMillis() - startTime) / 1000;
+        long min = elapsed / 60;
+        long sec = elapsed % 60;
+        return String.format("%02d:%02d", min, sec);
+    }
 
     // ── Getters ──────────────────────────────────────────────────────
     public Board  getBoard()    { return board; }

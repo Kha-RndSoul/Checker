@@ -2,20 +2,35 @@ package Model;
 
 import java.util.*;
 
-/** Trạng thái toàn bộ ván cờ: bàn cờ, lượt đi, quân đang chọn. */
 public class GameModel {
 
     public enum Mode   { PVP, PV_AI }
     public enum Status { PLAYING, RED_WINS, BLACK_WINS }
     public enum Diff   { EASY, MEDIUM, HARD }
 
+    // Dung Lớp Snapshot lưu trạng thái cũ để phục vụ hoàn tác
+    private static class GameStateSnapshot {
+        final Board boardSnapshot;
+        final boolean redTurnSnapshot;
+        final Status statusSnapshot;
+
+        GameStateSnapshot(Board b, boolean rt, Status s) {
+            this.boardSnapshot = b.copy();
+            this.redTurnSnapshot = rt;
+            this.statusSnapshot = s;
+        }
+    }
+
     private Board  board;
     private Mode   mode;
     private Status status;
-    private boolean redTurn;        // true = lượt đỏ
+    private boolean redTurn;
     private Piece  selected;
     private List<Move> selMoves = new ArrayList<>();
     private AIPlayer ai;
+
+    // Dung ngăn xếp duy nhất cho Undo
+    private final Stack<GameStateSnapshot> undoStack = new Stack<>();
 
     public void newGame(Mode mode, Diff diff) {
         this.mode   = mode;
@@ -26,9 +41,10 @@ public class GameModel {
         this.selected = null;
         this.selMoves = new ArrayList<>();
         this.ai = (mode == Mode.PV_AI) ? new AIPlayer(diff) : null;
+
+        undoStack.clear(); // Xóa lịch sử khi vào ván mới
     }
 
-    /** Chọn quân tại (r,c). Trả về true nếu chọn được. */
     public boolean select(int r, int c) {
         clearSelection();
         Piece p = board.get(r, c);
@@ -39,7 +55,6 @@ public class GameModel {
         return true;
     }
 
-    /** Thực hiện nước đi đến (r,c) nếu hợp lệ. Trả về true nếu thành công. */
     public boolean moveTo(int r, int c) {
         for (Move m : selMoves)
             if (m.getToRow()==r && m.getToCol()==c) { applyMove(m); return true; }
@@ -47,11 +62,28 @@ public class GameModel {
     }
 
     public void applyMove(Move m) {
+        // Lưu lại trạng thái hiện tại trước khi thực hiện nước đi mới
+        undoStack.push(new GameStateSnapshot(board, redTurn, status));
+
         board.applyMove(m);
         clearSelection();
         redTurn = !redTurn;
         checkWin();
     }
+
+    // Logic xử lý Hoàn tác
+    public boolean undo() {
+        if (undoStack.isEmpty()) return false;
+
+        GameStateSnapshot snap = undoStack.pop();
+        this.board = snap.boardSnapshot;
+        this.redTurn = snap.redTurnSnapshot;
+        this.status = snap.statusSnapshot;
+        clearSelection();
+        return true;
+    }
+
+    public boolean canUndo() { return !undoStack.isEmpty(); }
 
     private void checkWin() {
         if (board.validMoves(true).isEmpty())  status = Status.BLACK_WINS;
@@ -59,7 +91,6 @@ public class GameModel {
     }
 
     public void clearSelection() { selected=null; selMoves=new ArrayList<>(); }
-
     public Move getAIMove() { return (ai!=null) ? ai.best(board, redTurn) : null; }
 
     // ── Getters ──────────────────────────────────────────────────────
@@ -69,6 +100,4 @@ public class GameModel {
     public boolean isRedTurn()  { return redTurn; }
     public Piece  getSelected() { return selected; }
     public List<Move> getSelMoves() { return selMoves; }
-    public int redCount()  { return board==null?0:board.count(true);  }
-    public int blackCount(){ return board==null?0:board.count(false); }
 }

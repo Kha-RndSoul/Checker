@@ -23,4 +23,7 @@ public class Move {
     public int getToCol()    { return steps.get(steps.size()-1)[1]; }
     public List<int[]> getCaptures() { return captures; }
     public boolean isCapture()       { return !captures.isEmpty(); }
+
+    // Dung Thêm getSteps để trả về danh sách các bước đi, bao gồm cả ô xuất phát và ô đáp.
+    public List<int[]> getSteps()    { return steps; }
 }

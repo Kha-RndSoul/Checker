@@ -40,23 +40,34 @@ public class GameController {
             if (moved) { checkGameOver(); scheduleAI(); return; }
         }
 
+        // Lấy thông tin quân cờ tại ô vừa click trước khi trạng thái selection bị thay đổi/xóa
+        Model.Piece clickedPiece = model.getBoard().get(row, col);
+
         boolean success = model.select(row, col);
 
-        // Phát triển tiếp - MSSV:23130141 - Họ tên: Nguyễn Tuấn Kha
-        // Nâng cấp UC04: Xử lý luồng ngoại lệ - Phản hồi trực quan khi chọn sai quân trong thế bắt buộc ăn
+        // PHẦN PHÁT TRIỂN TIẾP - MSSV: 23130141 - Họ tên: Nguyễn Tuấn Kha
+        // Nâng cấp UC04: Xử lý các luồng ngoại lệ khi chọn quân cờ không thành công
         if (!success) {
-            Model.Piece p = model.getBoard().get(row, col);
-            if (p != null && p.isRed() == model.isRedTurn()) {
-
-                java.util.List<Model.Move> allMoves = model.getBoard().validMoves(model.isRedTurn());
-                boolean hasCapture = allMoves.stream().anyMatch(Model.Move::isCapture);
-
-                if (hasCapture) {
-                    // Hiển thị hộp thoại cảnh báo người chơi
+            if (clickedPiece != null) {
+                //Click trúng quân cờ của đối thủ
+                if (clickedPiece.isRed() != model.isRedTurn()) {
                     JOptionPane.showMessageDialog(frame,
-                            "Bạn không thể chọn quân này! Bắt buộc phải thực hiện nước ăn quân.",
-                            "Chọn quân sai luật",
-                            JOptionPane.WARNING_MESSAGE);
+                            "Không thể lựa chọn quân cờ này! Đây là quân cờ của đối thủ.",
+                            "Chọn sai quân cờ",
+                            JOptionPane.ERROR_MESSAGE);
+                }
+                //Click vào quân không phải quân có nước bắt buôc ăn
+                else {
+                    java.util.List<Model.Move> allMoves = model.getBoard().validMoves(model.isRedTurn());
+                    boolean hasCapture = allMoves.stream().anyMatch(Model.Move::isCapture);
+
+                    if (hasCapture) {
+                        // Hiển thị hộp thoại cảnh báo người chơi
+                        JOptionPane.showMessageDialog(frame,
+                                "Bạn không thể chọn quân này! Bắt buộc phải thực hiện nước ăn quân.",
+                                "Chọn quân sai luật",
+                                JOptionPane.WARNING_MESSAGE);
+                    }
                 }
             }
         }

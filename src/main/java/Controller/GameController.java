@@ -64,7 +64,7 @@ public class GameController {
         String winner = (st == GameModel.Status.RED_WINS) ? "ĐỎ 🔴" : "ĐEN ⚫";
         Timer t = new Timer(300, e -> {
             int opt = JOptionPane.showOptionDialog(frame,
-                    winner + " thắng!\nBạn muốn chơi tiếp?",
+                    winner + " thắng!\nLý do: " + model.getEndReason() + "\nBạn muốn chơi tiếp?",
                     "Kết thúc ván", JOptionPane.YES_NO_OPTION,
                     JOptionPane.INFORMATION_MESSAGE, null,
                     new String[]{"Chơi lại", "Menu"}, "Chơi lại");

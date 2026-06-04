@@ -8,7 +8,7 @@ public class GameModel {
     public enum Mode   { PVP, PV_AI }
     public enum Status { PLAYING, RED_WINS, BLACK_WINS }
     public enum Diff   { EASY, MEDIUM, HARD }
-
+    private String endReason = "";//Phuoc
     private Board  board;
     private Mode   mode;
     private Status status;
@@ -52,10 +52,22 @@ public class GameModel {
         redTurn = !redTurn;
         checkWin();
     }
-
+    //Phuoc
+    private boolean hasNoValidMoves(boolean isRed) {
+        return board.validMoves(isRed).isEmpty();
+    }
+    //endPhuoc
     private void checkWin() {
-        if (board.validMoves(true).isEmpty())  status = Status.BLACK_WINS;
-        if (board.validMoves(false).isEmpty()) status = Status.RED_WINS;
+        if (hasNoValidMoves(true)) {
+            status = Status.BLACK_WINS;
+            endReason = "Đỏ không còn nước đi hợp lệ";
+            return;
+        }
+
+        if (hasNoValidMoves(false)) {
+            status = Status.RED_WINS;
+            endReason = "Đen không còn nước đi hợp lệ";
+        }
     }
 
     public void clearSelection() { selected=null; selMoves=new ArrayList<>(); }
@@ -71,4 +83,6 @@ public class GameModel {
     public List<Move> getSelMoves() { return selMoves; }
     public int redCount()  { return board==null?0:board.count(true);  }
     public int blackCount(){ return board==null?0:board.count(false); }
+    //Phuoc
+    public String getEndReason() {return endReason;}
 }

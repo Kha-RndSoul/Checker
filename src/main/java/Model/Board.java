@@ -114,7 +114,11 @@ public class Board {
         }
         return findNormals(row, col, isRed, p.isKing());
     }
-
+    //Phuoc_conNuocDi?
+    public boolean hasNoValidMove(boolean isRed) {
+        return validMoves(isRed).isEmpty();
+    }
+    //endPhuoc
     private List<Move> findNormals(int r, int c, boolean isRed, boolean isKing) {
         List<Move> res = new ArrayList<>();
         for (int[] d : dirs(isRed, isKing)) {

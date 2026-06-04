@@ -85,7 +85,7 @@ public class GameModel {
     public void applyMove(Move m) {
         //  PHẦN PHÁT TRIỂN - 23130072-Dũng 
         // Đẩy trạng thái hiện tại vào lưu trữ lịch sử trước khi thay đổi dữ liệu bàn cờ
-        undoStack.push(new GameStateSnapshot(board, redTurn, status, redMoves, blackMoves, redCaptures, blackCaptures)
+        undoStack.push(new GameStateSnapshot(board, redTurn, status, redMoves, blackMoves, redCaptures, blackCaptures));
 
         // Cập nhật thống kê nước đi
         int captured = (m.getCaptures() != null) ? m.getCaptures().size() : 0;
@@ -121,9 +121,8 @@ public class GameModel {
         return true;
     }
 
-    public boolean canUndo() { return !undoStack.isEmpty(); }
-    // ───────────────────────────────────────────────────────────────────────
-
+    public boolean canUndo() {
+        return !undoStack.isEmpty(); }
     private void checkWin() {
         if (board.validMoves(true).isEmpty())  status = Status.BLACK_WINS;
         if (board.validMoves(false).isEmpty()) status = Status.RED_WINS;

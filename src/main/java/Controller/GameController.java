@@ -244,3 +244,6 @@ public class GameController {
                 BorderFactory.createLineBorder(bg.darker(), 1, true),
                 BorderFactory.createEmptyBorder(8, 20, 8, 20)
         ));
+        return btn;
+    }
+}

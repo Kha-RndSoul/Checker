@@ -5,11 +5,6 @@ import View.MainFrame;
 import javax.swing.*;
 import java.awt.*;
 
-/**
- * CONTROLLER — GameController
- * Kết nối Model và View, xử lý toàn bộ tương tác người dùng.
- * ĐÃ TÍCH HỢP: UC04 (Tuấn Kha), Thống kê kết thúc ván, Hoàn tác (Undo) và Block Animation (Dũng).
- */
 public class GameController {
     private final GameModel model = new GameModel();
     private MainFrame frame;
@@ -22,7 +17,7 @@ public class GameController {
         frame.getBoard().setClickListener(this::handleClick);
         frame.getMenuBtn().addActionListener(e -> frame.showMenu());
 
-        // 🟩 TÍCH HỢP LẠI: Lắng nghe sự kiện nút Hoàn tác
+        // Lắng nghe sự kiện nút Hoàn tác
         frame.getUndoBtn().addActionListener(e -> handleUndo());
 
         frame.showMenu();
@@ -39,11 +34,11 @@ public class GameController {
     private void handleClick(int row, int col) {
         if (model.getStatus() != GameModel.Status.PLAYING) return;
 
-        // 🟩 TÍCH HỢP LẠI: Khóa bấm chuột nếu quân cờ cũ chưa lướt xong animation
+        // Khóa bấm chuột nếu quân cờ cũ chưa lướt xong animation
         if (frame.getBoard().isAnimating()) return;
         if (model.getMode() == GameModel.Mode.PV_AI && !model.isRedTurn()) return;
 
-        // 🟩 TÍCH HỢP LẠI: Kiểm tra thực hiện nước đi kèm hiệu ứng Animation mượt mà
+        // Kiểm tra thực hiện nước đi kèm hiệu ứng Animation mượt mà
         if (model.getSelected() != null) {
             Move targetMove = null;
             for (Move m : model.getSelMoves()) {
@@ -93,7 +88,7 @@ public class GameController {
         frame.refresh(model);
     }
 
-    // 🟩 TÍCH HỢP LẠI: Hàm điều phối chạy Animation rồi mới áp dụng logic Model
+    //  Hàm điều phối chạy Animation rồi mới áp dụng logic Model
     private void executeMoveWithAnimation(Move m) {
         Piece activePiece = model.getBoard().get(m.getFromRow(), m.getFromCol());
         if (activePiece == null) return;
@@ -114,7 +109,7 @@ public class GameController {
         });
     }
 
-    // 🟩 TÍCH HỢP LẠI: Hàm xử lý logic Hoàn tác (Tự động lùi 2 lượt nếu đánh với AI)
+    //  Hàm xử lý logic Hoàn tác (Tự động lùi 2 lượt nếu đánh với AI)
     private void handleUndo() {
         if (frame.getBoard().isAnimating()) return; // Tuyệt đối không cho bấm khi đang bay quân
 
@@ -208,6 +203,7 @@ public class GameController {
 
             // Tạo dialog
             JDialog dialog = new JDialog(frame, "Kết thúc ván", true);
+            dialog.setUndecorated(false);
             dialog.getContentPane().add(panel);
             dialog.pack();
             dialog.setLocationRelativeTo(frame);
@@ -222,7 +218,9 @@ public class GameController {
         t.start();
     }
 
-    private void addStatRow(JPanel grid, String left, String right, String unused1, String unused2) {
+    // Helper: tạo 1 hàng thống kê (label trái + value phải)
+    private void addStatRow(JPanel grid, String left, String right,
+                            String unused1, String unused2) {
         JLabel l = new JLabel(left);
         l.setFont(new Font("SansSerif", Font.PLAIN, 13));
         l.setForeground(new Color(60, 50, 30));
@@ -235,6 +233,7 @@ public class GameController {
         grid.add(r);
     }
 
+    // Helper: tạo nút bấm có màu tùy chỉnh
     private JButton makeButton(String text, Color bg) {
         JButton btn = new JButton(text);
         btn.setFont(new Font("SansSerif", Font.BOLD, 14));
@@ -245,17 +244,3 @@ public class GameController {
                 BorderFactory.createLineBorder(bg.darker(), 1, true),
                 BorderFactory.createEmptyBorder(8, 20, 8, 20)
         ));
-        btn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        return btn;
-    }
-
-    private String buildStatsMessage() {
-        return "─────────────────────────────\n"
-                + "  📊 THỐNG KÊ VÁN ĐẤU\n"
-                + "─────────────────────────────\n"
-                + String.format("  ⏱  Thời gian    : %s%n", model.getElapsedTime())
-                + String.format("  🔴 Đỏ  — Nước đi: %d  |  Quân ăn: %d%n", model.getRedMoves(), model.getRedCaptures())
-                + String.format("  ⚫ Đen — Nước đi: %d  |  Quân ăn: %d%n", model.getBlackMoves(), model.getBlackCaptures())
-                + "─────────────────────────────\n";
-    }
-}

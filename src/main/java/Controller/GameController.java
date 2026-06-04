@@ -202,15 +202,5 @@ public class GameController {
         btn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         return btn;
     }
-    private String buildStatsMessage() {
-        return "─────────────────────────────\n"
-                + "  📊 THỐNG KÊ VÁN ĐẤU\n"
-                + "─────────────────────────────\n"
-                + String.format("  ⏱  Thời gian    : %s%n", model.getElapsedTime())
-                + String.format("  🔴 Đỏ  — Nước đi: %d  |  Quân ăn: %d%n",
-                model.getRedMoves(), model.getRedCaptures())
-                + String.format("  ⚫ Đen — Nước đi: %d  |  Quân ăn: %d%n",
-                model.getBlackMoves(), model.getBlackCaptures())
-                + "─────────────────────────────\n";
-    }
+
 }

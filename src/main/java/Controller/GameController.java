@@ -5,10 +5,6 @@ import View.MainFrame;
 import javax.swing.*;
 import java.awt.*;
 
-/**
- * CONTROLLER — GameController
- * Kết nối Model và View, xử lý toàn bộ tương tác người dùng.
- */
 public class GameController {
     private final GameModel model = new GameModel();
     private MainFrame frame;
@@ -20,6 +16,10 @@ public class GameController {
         frame.getMenu().setOnStart(this::startGame);
         frame.getBoard().setClickListener(this::handleClick);
         frame.getMenuBtn().addActionListener(e -> frame.showMenu());
+
+        // Lắng nghe sự kiện nút Hoàn tác
+        frame.getUndoBtn().addActionListener(e -> handleUndo());
+
         frame.showMenu();
         frame.setVisible(true);
     }
@@ -33,12 +33,24 @@ public class GameController {
 
     private void handleClick(int row, int col) {
         if (model.getStatus() != GameModel.Status.PLAYING) return;
+
+        // Khóa bấm chuột nếu quân cờ cũ chưa lướt xong animation
+        if (frame.getBoard().isAnimating()) return;
         if (model.getMode() == GameModel.Mode.PV_AI && !model.isRedTurn()) return;
 
+        // Kiểm tra thực hiện nước đi kèm hiệu ứng Animation mượt mà
         if (model.getSelected() != null) {
-            boolean moved = model.moveTo(row, col);
-            frame.refresh(model);
-            if (moved) { checkGameOver(); scheduleAI(); return; }
+            Move targetMove = null;
+            for (Move m : model.getSelMoves()) {
+                if (m.getToRow() == row && m.getToCol() == col) {
+                    targetMove = m;
+                    break;
+                }
+            }
+            if (targetMove != null) {
+                executeMoveWithAnimation(targetMove);
+                return;
+            }
         }
 
         // Lấy thông tin quân cờ tại ô vừa click trước khi trạng thái selection bị thay đổi/xóa
@@ -76,14 +88,50 @@ public class GameController {
         frame.refresh(model);
     }
 
+    //  Hàm điều phối chạy Animation rồi mới áp dụng logic Model
+    private void executeMoveWithAnimation(Move m) {
+        Piece activePiece = model.getBoard().get(m.getFromRow(), m.getFromCol());
+        if (activePiece == null) return;
+
+        boolean isRed = activePiece.isRed();
+        boolean isKing = activePiece.isKing();
+
+        model.clearSelection();
+        frame.refresh(model);
+
+        // Gọi lệnh chạy chuyển động đồ họa từ BoardPanel
+        frame.getBoard().startAnimation(m, isRed, isKing, () -> {
+            model.applyMove(m);
+            frame.refresh(model);
+
+            checkGameOver();
+            scheduleAI();
+        });
+    }
+
+    //  Hàm xử lý logic Hoàn tác (Tự động lùi 2 lượt nếu đánh với AI)
+    private void handleUndo() {
+        if (frame.getBoard().isAnimating()) return; // Tuyệt đối không cho bấm khi đang bay quân
+
+        if (model.undo()) {
+            if (model.getMode() == GameModel.Mode.PV_AI && !model.isRedTurn()) {
+                model.undo(); // Lùi tiếp lượt của AI để trả sân cho người chơi
+            }
+            frame.refresh(model);
+        }
+    }
+
     private void scheduleAI() {
         if (model.getMode() != GameModel.Mode.PV_AI) return;
         if (model.isRedTurn() || model.getStatus() != GameModel.Status.PLAYING) return;
-        Timer t = new Timer(500, e -> {
-            Move m = model.getAIMove();
-            if (m != null) model.applyMove(m);
-            frame.refresh(model);
-            checkGameOver();
+
+        // Giảm xuống 400ms để cân bằng với thời gian chạy Animation
+        Timer t = new Timer(400, e -> {
+            Move aiMove = model.getAIMove();
+            if (aiMove != null) {
+                // Áp dụng animation mượt mà cho cả nước đi của AI tính toán
+                executeMoveWithAnimation(aiMove);
+            }
         });
         t.setRepeats(false); t.start();
     }
@@ -135,12 +183,9 @@ public class GameController {
             statsGrid.setBackground(new Color(245, 240, 230));
             statsGrid.setAlignmentX(Component.CENTER_ALIGNMENT);
 
-            addStatRow(statsGrid, "⏱  Thời gian",   model.getElapsedTime(),
-                    "", "");
-            addStatRow(statsGrid, "🔴 Đỏ — Nước đi: " + model.getRedMoves(),
-                    "Quân ăn: " + model.getRedCaptures(), "", "");
-            addStatRow(statsGrid, "⚫ Đen — Nước đi: " + model.getBlackMoves(),
-                    "Quân ăn: " + model.getBlackCaptures(), "", "");
+            addStatRow(statsGrid, "⏱  Thời gian",   model.getElapsedTime(), "", "");
+            addStatRow(statsGrid, "🔴 Đỏ — Nước đi: " + model.getRedMoves(), "Quân ăn: " + model.getRedCaptures(), "", "");
+            addStatRow(statsGrid, "⚫ Đen — Nước đi: " + model.getBlackMoves(), "Quân ăn: " + model.getBlackCaptures(), "", "");
 
             panel.add(statsGrid);
             panel.add(Box.createVerticalStrut(20));
@@ -199,18 +244,3 @@ public class GameController {
                 BorderFactory.createLineBorder(bg.darker(), 1, true),
                 BorderFactory.createEmptyBorder(8, 20, 8, 20)
         ));
-        btn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        return btn;
-    }
-    private String buildStatsMessage() {
-        return "─────────────────────────────\n"
-                + "  📊 THỐNG KÊ VÁN ĐẤU\n"
-                + "─────────────────────────────\n"
-                + String.format("  ⏱  Thời gian    : %s%n", model.getElapsedTime())
-                + String.format("  🔴 Đỏ  — Nước đi: %d  |  Quân ăn: %d%n",
-                model.getRedMoves(), model.getRedCaptures())
-                + String.format("  ⚫ Đen — Nước đi: %d  |  Quân ăn: %d%n",
-                model.getBlackMoves(), model.getBlackCaptures())
-                + "─────────────────────────────\n";
-    }
-}

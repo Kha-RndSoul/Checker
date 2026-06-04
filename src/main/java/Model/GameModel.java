@@ -2,35 +2,48 @@ package Model;
 
 import java.util.*;
 
+/** Trạng thái toàn bộ ván cờ: bàn cờ, lượt đi, quân đang chọn. */
 public class GameModel {
 
     public enum Mode   { PVP, PV_AI }
     public enum Status { PLAYING, RED_WINS, BLACK_WINS }
     public enum Diff   { EASY, MEDIUM, HARD }
 
-    // Dung Lớp Snapshot lưu trạng thái cũ để phục vụ hoàn tác
+    // ── PHẦN PHÁT TRIỂN - MSSV: [Điền MSSV] - Họ tên: Dũng ─────────────────
+    // Cấu trúc Snapshot để chụp lại khoảnh khắc của bàn cờ trước mỗi nước đi
     private static class GameStateSnapshot {
         final Board boardSnapshot;
         final boolean redTurnSnapshot;
         final Status statusSnapshot;
+        final int redMovesSnap, blackMovesSnap, redCapturesSnap, blackCapturesSnap;
 
-        GameStateSnapshot(Board b, boolean rt, Status s) {
+        GameStateSnapshot(Board b, boolean rt, Status s, int rm, int bm, int rc, int bc) {
             this.boardSnapshot = b.copy();
             this.redTurnSnapshot = rt;
             this.statusSnapshot = s;
+            this.redMovesSnap = rm;
+            this.blackMovesSnap = bm;
+            this.redCapturesSnap = rc;
+            this.blackCapturesSnap = bc;
         }
     }
+    private final Stack<GameStateSnapshot> undoStack = new Stack<>();
+
+    // Các biến phục vụ thống kê ván đấu theo yêu cầu từ Controller
+    private int redMoves = 0;
+    private int blackMoves = 0;
+    private int redCaptures = 0;
+    private int blackCaptures = 0;
+    private long startTime;
+    // ───────────────────────────────────────────────────────────────────────
 
     private Board  board;
     private Mode   mode;
     private Status status;
-    private boolean redTurn;
+    private boolean redTurn;        // true = lượt đỏ
     private Piece  selected;
     private List<Move> selMoves = new ArrayList<>();
     private AIPlayer ai;
-
-    // Dung ngăn xếp duy nhất cho Undo
-    private final Stack<GameStateSnapshot> undoStack = new Stack<>();
 
     public void newGame(Mode mode, Diff diff) {
         this.mode   = mode;
@@ -42,9 +55,17 @@ public class GameModel {
         this.selMoves = new ArrayList<>();
         this.ai = (mode == Mode.PV_AI) ? new AIPlayer(diff) : null;
 
-        undoStack.clear(); // Xóa lịch sử khi vào ván mới
+        // ── PHẦN PHÁT TRIỂN - MSSV: [Điền MSSV] - Họ tên: Dũng ─────────────────
+        this.undoStack.clear();
+        this.redMoves = 0;
+        this.blackMoves = 0;
+        this.redCaptures = 0;
+        this.blackCaptures = 0;
+        this.startTime = System.currentTimeMillis();
+        // ───────────────────────────────────────────────────────────────────────
     }
 
+    /** Chọn quân tại (r,c). Trả về true nếu chọn được. */
     public boolean select(int r, int c) {
         clearSelection();
         Piece p = board.get(r, c);
@@ -55,6 +76,7 @@ public class GameModel {
         return true;
     }
 
+    /** Thực hiện nước đi đến (r,c) nếu hợp lệ. Trả về true nếu thành công. */
     public boolean moveTo(int r, int c) {
         for (Move m : selMoves)
             if (m.getToRow()==r && m.getToCol()==c) { applyMove(m); return true; }
@@ -62,8 +84,17 @@ public class GameModel {
     }
 
     public void applyMove(Move m) {
-        // Lưu lại trạng thái hiện tại trước khi thực hiện nước đi mới
-        undoStack.push(new GameStateSnapshot(board, redTurn, status));
+        // ── PHẦN PHÁT TRIỂN - MSSV: [Điền MSSV] - Họ tên: Dũng ─────────────────
+        // Đẩy trạng thái hiện tại vào lưu trữ lịch sử trước khi thay đổi dữ liệu bàn cờ
+        undoStack.push(new GameStateSnapshot(board, redTurn, status, redMoves, blackMoves, redCaptures, blackCaptures));
+
+        // Tích lũy số liệu thống kê nước đi và quân cờ bị ăn
+        if (redTurn) redMoves++; else blackMoves++;
+        if (m.isCapture()) {
+            int count = (m.getCaptures() != null) ? m.getCaptures().size() : 1;
+            if (redTurn) redCaptures += count; else blackCaptures += count;
+        }
+        // ───────────────────────────────────────────────────────────────────────
 
         board.applyMove(m);
         clearSelection();
@@ -71,7 +102,8 @@ public class GameModel {
         checkWin();
     }
 
-    // Logic xử lý Hoàn tác
+    // ── PHẦN PHÁT TRIỂN - MSSV: [Điền MSSV] - Họ tên: Dũng ─────────────────
+    // Logic rút quân quay ngược thời gian phục vụ tính năng Hoàn tác
     public boolean undo() {
         if (undoStack.isEmpty()) return false;
 
@@ -79,11 +111,24 @@ public class GameModel {
         this.board = snap.boardSnapshot;
         this.redTurn = snap.redTurnSnapshot;
         this.status = snap.statusSnapshot;
+        this.redMoves = snap.redMovesSnap;
+        this.blackMoves = snap.blackMovesSnap;
+        this.redCaptures = snap.redCapturesSnap;
+        this.blackCaptures = snap.blackCapturesSnap;
+
         clearSelection();
         return true;
     }
 
     public boolean canUndo() { return !undoStack.isEmpty(); }
+
+    public String getElapsedTime() {
+        long duration = (System.currentTimeMillis() - startTime) / 1000;
+        long min = duration / 60;
+        long sec = duration % 60;
+        return String.format("%02d:%02d", min, sec);
+    }
+    // ───────────────────────────────────────────────────────────────────────
 
     private void checkWin() {
         if (board.validMoves(true).isEmpty())  status = Status.BLACK_WINS;
@@ -91,6 +136,7 @@ public class GameModel {
     }
 
     public void clearSelection() { selected=null; selMoves=new ArrayList<>(); }
+
     public Move getAIMove() { return (ai!=null) ? ai.best(board, redTurn) : null; }
 
     // ── Getters ──────────────────────────────────────────────────────
@@ -100,4 +146,13 @@ public class GameModel {
     public boolean isRedTurn()  { return redTurn; }
     public Piece  getSelected() { return selected; }
     public List<Move> getSelMoves() { return selMoves; }
+    public int redCount()  { return board==null?0:board.count(true);  }
+    public int blackCount(){ return board==null?0:board.count(false); }
+
+    // ── PHẦN PHÁT TRIỂN - MSSV: [Điền MSSV] - Họ tên: Dũng ─────────────────
+    public int getRedMoves() { return redMoves; }
+    public int getBlackMoves() { return blackMoves; }
+    public int getRedCaptures() { return redCaptures; }
+    public int getBlackCaptures() { return blackCaptures; }
+    // ───────────────────────────────────────────────────────────────────────
 }

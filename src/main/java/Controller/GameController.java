@@ -33,43 +33,41 @@ public class GameController {
 
     private void handleClick(int row, int col) {
         if (model.getStatus() != GameModel.Status.PLAYING) return;
-
-        // Khóa bấm chuột nếu quân cờ cũ chưa lướt xong animation
-        if (frame.getBoard().isAnimating()) return;
         if (model.getMode() == GameModel.Mode.PV_AI && !model.isRedTurn()) return;
 
-        // Kiểm tra thực hiện nước đi kèm hiệu ứng Animation mượt mà
-        if (model.getSelected() != null) {
-            Move targetMove = null;
-            for (Move m : model.getSelMoves()) {
-                if (m.getToRow() == row && m.getToCol() == col) {
-                    targetMove = m;
-                    break;
-                }
-            }
-            if (targetMove != null) {
-                executeMoveWithAnimation(targetMove);
-                return;
-            }
+        if (row < 0 || row >= 8 || col < 0 || col >= 8) return;
+
+        Model.Piece clickedPiece = model.getBoard().get(row, col);
+        Model.Piece selectedPiece = model.getSelected();
+
+        // PHẦN PHÁT TRIỂN TIẾP - MSSV: 23130141 - Họ tên: Nguyễn Tuấn Kha
+        // Hủy chọn khi click lại chính quân cờ đang chọn
+        if (selectedPiece != null && selectedPiece.getRow() == row && selectedPiece.getCol() == col) {
+            model.clearSelection();
+            frame.refresh(model);
+            return;
         }
 
-        // Lấy thông tin quân cờ tại ô vừa click trước khi trạng thái selection bị thay đổi/xóa
-        Model.Piece clickedPiece = model.getBoard().get(row, col);
+        if (selectedPiece != null) {
+            boolean moved = model.moveTo(row, col);
+            frame.refresh(model);
+            if (moved) { checkGameOver(); scheduleAI(); return; }
+        }
 
         boolean success = model.select(row, col);
 
         // PHẦN PHÁT TRIỂN TIẾP - MSSV: 23130141 - Họ tên: Nguyễn Tuấn Kha
-        // Nâng cấp UC04: Xử lý các luồng ngoại lệ khi chọn quân cờ không thành công
+        // Xử lý các luồng ngoại lệ khi chọn quân cờ không thành công
         if (!success) {
             if (clickedPiece != null) {
-                //Click trúng quân cờ của đối thủ
+                // Click trúng quân cờ của đối thủ
                 if (clickedPiece.isRed() != model.isRedTurn()) {
                     JOptionPane.showMessageDialog(frame,
                             "Không thể lựa chọn quân cờ này! Đây là quân cờ của đối thủ.",
                             "Chọn sai quân cờ",
                             JOptionPane.ERROR_MESSAGE);
                 }
-                //Click vào quân không phải quân có nước bắt buôc ăn
+                //Click vào quân vi phạm luật ăn bắt buộc
                 else {
                     java.util.List<Model.Move> allMoves = model.getBoard().validMoves(model.isRedTurn());
                     boolean hasCapture = allMoves.stream().anyMatch(Model.Move::isCapture);
@@ -84,6 +82,7 @@ public class GameController {
                 }
             }
         }
+        // =========================================================================
 
         frame.refresh(model);
     }

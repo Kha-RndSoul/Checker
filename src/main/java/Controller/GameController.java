@@ -3,10 +3,12 @@ package Controller;
 import Model.*;
 import View.MainFrame;
 import javax.swing.*;
+import java.awt.*;
 
 /**
  * CONTROLLER — GameController
  * Kết nối Model và View, xử lý toàn bộ tương tác người dùng.
+ * ĐÃ TÍCH HỢP: UC04 (Tuấn Kha), Thống kê kết thúc ván, Hoàn tác (Undo) và Block Animation (Dũng).
  */
 public class GameController {
     private final GameModel model = new GameModel();
@@ -19,6 +21,10 @@ public class GameController {
         frame.getMenu().setOnStart(this::startGame);
         frame.getBoard().setClickListener(this::handleClick);
         frame.getMenuBtn().addActionListener(e -> frame.showMenu());
+
+        // 🟩 TÍCH HỢP LẠI: Lắng nghe sự kiện nút Hoàn tác
+        frame.getUndoBtn().addActionListener(e -> handleUndo());
+
         frame.showMenu();
         frame.setVisible(true);
     }
@@ -32,28 +38,105 @@ public class GameController {
 
     private void handleClick(int row, int col) {
         if (model.getStatus() != GameModel.Status.PLAYING) return;
-        // Bỏ qua click khi đến lượt AI
-        if (model.getMode()==GameModel.Mode.PV_AI && !model.isRedTurn()) return;
 
-        // Nếu đã chọn quân → thử di chuyển
+        // 🟩 TÍCH HỢP LẠI: Khóa bấm chuột nếu quân cờ cũ chưa lướt xong animation
+        if (frame.getBoard().isAnimating()) return;
+        if (model.getMode() == GameModel.Mode.PV_AI && !model.isRedTurn()) return;
+
+        // 🟩 TÍCH HỢP LẠI: Kiểm tra thực hiện nước đi kèm hiệu ứng Animation mượt mà
         if (model.getSelected() != null) {
-            boolean moved = model.moveTo(row, col);
-            frame.refresh(model);
-            if (moved) { checkGameOver(); scheduleAI(); return; }
+            Move targetMove = null;
+            for (Move m : model.getSelMoves()) {
+                if (m.getToRow() == row && m.getToCol() == col) {
+                    targetMove = m;
+                    break;
+                }
+            }
+            if (targetMove != null) {
+                executeMoveWithAnimation(targetMove);
+                return;
+            }
         }
-        // Chọn quân mới
-        model.select(row, col);
+
+        // Lấy thông tin quân cờ tại ô vừa click trước khi trạng thái selection bị thay đổi/xóa
+        Model.Piece clickedPiece = model.getBoard().get(row, col);
+
+        boolean success = model.select(row, col);
+
+        // PHẦN PHÁT TRIỂN TIẾP - MSSV: 23130141 - Họ tên: Nguyễn Tuấn Kha
+        // Nâng cấp UC04: Xử lý các luồng ngoại lệ khi chọn quân cờ không thành công
+        if (!success) {
+            if (clickedPiece != null) {
+                //Click trúng quân cờ của đối thủ
+                if (clickedPiece.isRed() != model.isRedTurn()) {
+                    JOptionPane.showMessageDialog(frame,
+                            "Không thể lựa chọn quân cờ này! Đây là quân cờ của đối thủ.",
+                            "Chọn sai quân cờ",
+                            JOptionPane.ERROR_MESSAGE);
+                }
+                //Click vào quân không phải quân có nước bắt buôc ăn
+                else {
+                    java.util.List<Model.Move> allMoves = model.getBoard().validMoves(model.isRedTurn());
+                    boolean hasCapture = allMoves.stream().anyMatch(Model.Move::isCapture);
+
+                    if (hasCapture) {
+                        // Hiển thị hộp thoại cảnh báo người chơi
+                        JOptionPane.showMessageDialog(frame,
+                                "Bạn không thể chọn quân này! Bắt buộc phải thực hiện nước ăn quân.",
+                                "Chọn quân sai luật",
+                                JOptionPane.WARNING_MESSAGE);
+                    }
+                }
+            }
+        }
+
         frame.refresh(model);
+    }
+
+    // 🟩 TÍCH HỢP LẠI: Hàm điều phối chạy Animation rồi mới áp dụng logic Model
+    private void executeMoveWithAnimation(Move m) {
+        Piece activePiece = model.getBoard().get(m.getFromRow(), m.getFromCol());
+        if (activePiece == null) return;
+
+        boolean isRed = activePiece.isRed();
+        boolean isKing = activePiece.isKing();
+
+        model.clearSelection();
+        frame.refresh(model);
+
+        // Gọi lệnh chạy chuyển động đồ họa từ BoardPanel
+        frame.getBoard().startAnimation(m, isRed, isKing, () -> {
+            model.applyMove(m);
+            frame.refresh(model);
+
+            checkGameOver();
+            scheduleAI();
+        });
+    }
+
+    // 🟩 TÍCH HỢP LẠI: Hàm xử lý logic Hoàn tác (Tự động lùi 2 lượt nếu đánh với AI)
+    private void handleUndo() {
+        if (frame.getBoard().isAnimating()) return; // Tuyệt đối không cho bấm khi đang bay quân
+
+        if (model.undo()) {
+            if (model.getMode() == GameModel.Mode.PV_AI && !model.isRedTurn()) {
+                model.undo(); // Lùi tiếp lượt của AI để trả sân cho người chơi
+            }
+            frame.refresh(model);
+        }
     }
 
     private void scheduleAI() {
         if (model.getMode() != GameModel.Mode.PV_AI) return;
         if (model.isRedTurn() || model.getStatus() != GameModel.Status.PLAYING) return;
-        Timer t = new Timer(500, e -> {
-            Move m = model.getAIMove();
-            if (m != null) model.applyMove(m);
-            frame.refresh(model);
-            checkGameOver();
+
+        // Giảm xuống 400ms để cân bằng với thời gian chạy Animation
+        Timer t = new Timer(400, e -> {
+            Move aiMove = model.getAIMove();
+            if (aiMove != null) {
+                // Áp dụng animation mượt mà cho cả nước đi của AI tính toán
+                executeMoveWithAnimation(aiMove);
+            }
         });
         t.setRepeats(false); t.start();
     }
@@ -61,16 +144,118 @@ public class GameController {
     private void checkGameOver() {
         GameModel.Status st = model.getStatus();
         if (st == GameModel.Status.PLAYING) return;
-        String winner = (st == GameModel.Status.RED_WINS) ? "ĐỎ 🔴" : "ĐEN ⚫";
+
+        boolean redWins = (st == GameModel.Status.RED_WINS);
+        String winner = redWins ? "ĐỎ" : "ĐEN";
+        Color winColor = redWins ? new Color(200, 40, 40) : new Color(40, 40, 40);
+        String emoji = redWins ? "🔴" : "⚫";
+
         Timer t = new Timer(300, e -> {
-            int opt = JOptionPane.showOptionDialog(frame,
-                    winner + " thắng!\nBạn muốn chơi tiếp?",
-                    "Kết thúc ván", JOptionPane.YES_NO_OPTION,
-                    JOptionPane.INFORMATION_MESSAGE, null,
-                    new String[]{"Chơi lại", "Menu"}, "Chơi lại");
-            if (opt == 0) startGame(lastMode, lastDiff);
-            else frame.showMenu();
+            // ── Panel chính ──
+            JPanel panel = new JPanel();
+            panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+            panel.setBackground(new Color(245, 240, 230));
+            panel.setBorder(BorderFactory.createCompoundBorder(
+                    BorderFactory.createLineBorder(winColor, 3, true),
+                    BorderFactory.createEmptyBorder(20, 30, 20, 30)
+            ));
+
+            // Tiêu đề người thắng
+            JLabel titleLbl = new JLabel(emoji + "  " + winner + " THẮNG!  " + emoji, SwingConstants.CENTER);
+            titleLbl.setFont(new Font("SansSerif", Font.BOLD, 28));
+            titleLbl.setForeground(winColor);
+            titleLbl.setAlignmentX(Component.CENTER_ALIGNMENT);
+            panel.add(titleLbl);
+            panel.add(Box.createVerticalStrut(16));
+
+            // Đường kẻ ngang
+            JSeparator sep = new JSeparator();
+            sep.setForeground(new Color(180, 160, 120));
+            sep.setMaximumSize(new Dimension(Integer.MAX_VALUE, 2));
+            panel.add(sep);
+            panel.add(Box.createVerticalStrut(12));
+
+            // Thống kê
+            JLabel statsTitle = new JLabel("📊  THỐNG KÊ VÁN ĐẤU", SwingConstants.CENTER);
+            statsTitle.setFont(new Font("SansSerif", Font.BOLD, 14));
+            statsTitle.setForeground(new Color(80, 60, 20));
+            statsTitle.setAlignmentX(Component.CENTER_ALIGNMENT);
+            panel.add(statsTitle);
+            panel.add(Box.createVerticalStrut(10));
+
+            // Bảng thống kê dạng lưới
+            JPanel statsGrid = new JPanel(new GridLayout(3, 2, 8, 6));
+            statsGrid.setBackground(new Color(245, 240, 230));
+            statsGrid.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+            addStatRow(statsGrid, "⏱  Thời gian",   model.getElapsedTime(), "", "");
+            addStatRow(statsGrid, "🔴 Đỏ — Nước đi: " + model.getRedMoves(), "Quân ăn: " + model.getRedCaptures(), "", "");
+            addStatRow(statsGrid, "⚫ Đen — Nước đi: " + model.getBlackMoves(), "Quân ăn: " + model.getBlackCaptures(), "", "");
+
+            panel.add(statsGrid);
+            panel.add(Box.createVerticalStrut(20));
+
+            // Nút bấm
+            JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 16, 0));
+            btnPanel.setBackground(new Color(245, 240, 230));
+
+            JButton playAgainBtn = makeButton("▶  Chơi lại", new Color(50, 130, 50));
+            JButton menuBtnDialog = makeButton("◀  Menu",    new Color(80, 80, 160));
+
+            btnPanel.add(playAgainBtn);
+            btnPanel.add(menuBtnDialog);
+            panel.add(btnPanel);
+
+            // Tạo dialog
+            JDialog dialog = new JDialog(frame, "Kết thúc ván", true);
+            dialog.getContentPane().add(panel);
+            dialog.pack();
+            dialog.setLocationRelativeTo(frame);
+            dialog.setResizable(false);
+
+            playAgainBtn.addActionListener(ae -> { dialog.dispose(); startGame(lastMode, lastDiff); });
+            menuBtnDialog.addActionListener(ae -> { dialog.dispose(); frame.showMenu(); });
+
+            dialog.setVisible(true);
         });
-        t.setRepeats(false); t.start();
+        t.setRepeats(false);
+        t.start();
+    }
+
+    private void addStatRow(JPanel grid, String left, String right, String unused1, String unused2) {
+        JLabel l = new JLabel(left);
+        l.setFont(new Font("SansSerif", Font.PLAIN, 13));
+        l.setForeground(new Color(60, 50, 30));
+
+        JLabel r = new JLabel(right, SwingConstants.RIGHT);
+        r.setFont(new Font("SansSerif", Font.BOLD, 13));
+        r.setForeground(new Color(60, 50, 30));
+
+        grid.add(l);
+        grid.add(r);
+    }
+
+    private JButton makeButton(String text, Color bg) {
+        JButton btn = new JButton(text);
+        btn.setFont(new Font("SansSerif", Font.BOLD, 14));
+        btn.setBackground(bg);
+        btn.setForeground(Color.WHITE);
+        btn.setFocusPainted(false);
+        btn.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(bg.darker(), 1, true),
+                BorderFactory.createEmptyBorder(8, 20, 8, 20)
+        ));
+        btn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        return btn;
+    }
+
+    private String buildStatsMessage() {
+        return "─────────────────────────────\n"
+                + "  📊 THỐNG KÊ VÁN ĐẤU\n"
+                + "─────────────────────────────\n"
+                + String.format("  ⏱  Thời gian    : %s%n", model.getElapsedTime())
+                + String.format("  🔴 Đỏ  — Nước đi: %d  |  Quân ăn: %d%n", model.getRedMoves(), model.getRedCaptures())
+                + String.format("  ⚫ Đen — Nước đi: %d  |  Quân ăn: %d%n", model.getBlackMoves(), model.getBlackCaptures())
+                + "─────────────────────────────\n";
     }
 }

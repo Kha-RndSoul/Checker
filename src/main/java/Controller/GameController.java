@@ -29,6 +29,8 @@ public class GameController {
         model.newGame(mode, diff);
         frame.refresh(model);
         frame.showGame();
+
+        tryAutoSelectUniquePiece();
     }
 
     private void handleClick(int row, int col) {
@@ -51,7 +53,15 @@ public class GameController {
         if (selectedPiece != null) {
             boolean moved = model.moveTo(row, col);
             frame.refresh(model);
-            if (moved) { checkGameOver(); scheduleAI(); return; }
+            if (moved) {
+                checkGameOver();
+                scheduleAI();
+
+                // PHẦN PHÁT TRIỂN TIẾP - MSSV: 23130141 - Họ tên: Nguyễn Tuấn Kha
+                // Tự chọn quân cờ duy nhất cho người tiếp theo
+                tryAutoSelectUniquePiece();
+                return;
+            }
         }
 
         boolean success = model.select(row, col);
@@ -105,6 +115,8 @@ public class GameController {
 
             checkGameOver();
             scheduleAI();
+
+            tryAutoSelectUniquePiece();
         });
     }
 
@@ -117,6 +129,8 @@ public class GameController {
                 model.undo(); // Lùi tiếp lượt của AI để trả sân cho người chơi
             }
             frame.refresh(model);
+
+            tryAutoSelectUniquePiece();
         }
     }
 
@@ -246,4 +260,24 @@ public class GameController {
         return btn;
     }
 
+    // PHẦN PHÁT TRIỂN TIẾP - MSSV: 23130141 - Họ tên: Nguyễn Tuấn Kha
+    // Tự động chọn quân cờ nếu lượt đó chỉ có duy nhất 1 quân đi được
+    private void tryAutoSelectUniquePiece() {
+        if (model.getStatus() != GameModel.Status.PLAYING) return;
+        if (model.getMode() == GameModel.Mode.PV_AI && !model.isRedTurn()) return;
+
+        java.util.List<Model.Move> validMoves = model.getBoard().validMoves(model.isRedTurn());
+        if (validMoves.isEmpty()) return;
+
+        int firstRow = validMoves.get(0).getFromRow();
+        int firstCol = validMoves.get(0).getFromCol();
+
+        boolean isUniquePiece = validMoves.stream()
+                .allMatch(m -> m.getFromRow() == firstRow && m.getFromCol() == firstCol);
+
+        if (isUniquePiece) {
+            model.select(firstRow, firstCol);
+            frame.refresh(model);
+        }
+    }
 }

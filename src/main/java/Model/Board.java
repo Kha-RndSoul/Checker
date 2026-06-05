@@ -92,6 +92,10 @@ public class Board {
         }
         return normals;
     }
+    //Phuoc_UC11_checkbennaohetnuocdi
+    public boolean hasNoValidMoves(boolean isRed) {
+        return validMoves(isRed).isEmpty();
+    }
 
     /** Nước đi hợp lệ cho một quân cụ thể (tôn trọng forced capture + max capture). */
     public List<Move> movesForPiece(int row, int col, boolean isRed) {

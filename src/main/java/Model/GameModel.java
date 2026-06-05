@@ -17,8 +17,9 @@ public class GameModel {
         final boolean redTurnSnapshot;
         final Status statusSnapshot;
         final int redMovesSnap, blackMovesSnap, redCapturesSnap, blackCapturesSnap;
+        final List<String> moveLogSnapshot; // Lưu bản sao lịch sử tại thời điểm chụp
 
-        GameStateSnapshot(Board b, boolean rt, Status s, int rm, int bm, int rc, int bc) {
+        GameStateSnapshot(Board b, boolean rt, Status s, int rm, int bm, int rc, int bc, List<String> log) {
             this.boardSnapshot = b.copy();
             this.redTurnSnapshot = rt;
             this.statusSnapshot = s;
@@ -26,10 +27,12 @@ public class GameModel {
             this.blackMovesSnap = bm;
             this.redCapturesSnap = rc;
             this.blackCapturesSnap = bc;
+            this.moveLogSnapshot = new ArrayList<>(log); // Copy danh sách log cũ
         }
     }
     private final Stack<GameStateSnapshot> undoStack = new Stack<>();
-   
+    private List<String> moveLog = new ArrayList<>(); // Danh sách lưu trữ lịch sử nước đi dạng chuỗi ký tự
+
 
     private Board  board;
     private Mode   mode;
@@ -38,7 +41,7 @@ public class GameModel {
     private Piece  selected;
     private List<Move> selMoves = new ArrayList<>();
     private AIPlayer ai;
-    
+
     // Các biến phục vụ thống kê ván đấu
     private int redMoves = 0;
     private int blackMoves = 0;
@@ -59,6 +62,7 @@ public class GameModel {
         this.endReason = EndReason.NONE;
         // Reset dữ liệu thống kê & Lịch sử
         this.undoStack.clear();
+        this.moveLog.clear(); // ── PHẦN PHÁT TRIỂN-23130072-Dũng: Xóa trắng log khi sang ván mới
         this.redMoves      = 0;
         this.blackMoves    = 0;
         this.redCaptures   = 0;
@@ -85,9 +89,13 @@ public class GameModel {
     }
 
     public void applyMove(Move m) {
-        //  PHẦN PHÁT TRIỂN - 23130072-Dũng 
+        //  ── PHẦN PHÁT TRIỂN-23130072-Dũng
         // Đẩy trạng thái hiện tại vào lưu trữ lịch sử trước khi thay đổi dữ liệu bàn cờ
-        undoStack.push(new GameStateSnapshot(board, redTurn, status, redMoves, blackMoves, redCaptures, blackCaptures));
+        undoStack.push(new GameStateSnapshot(board, redTurn, status, redMoves, blackMoves, redCaptures, blackCaptures, moveLog));
+
+        // Sinh ký tự viết cờ đại số và thêm vào bảng log nước đi
+        String notation = generateNotation(m, redTurn);
+        moveLog.add(notation);
 
         // Cập nhật thống kê nước đi
         int captured = (m.getCaptures() != null) ? m.getCaptures().size() : 0;
@@ -98,14 +106,14 @@ public class GameModel {
             blackMoves++;
             blackCaptures += captured;
         }
-        
+
         board.applyMove(m);
         clearSelection();
         redTurn = !redTurn;
         checkWin();
     }
 
-    // PHẦN PHÁT TRIỂN - 23130072-Dũng
+    // ── PHẦN PHÁT TRIỂN-23130072-Dũng
     // Logic rút quân quay ngược thời gian phục vụ tính năng Hoàn tác
     public boolean undo() {
         if (undoStack.isEmpty()) return false;
@@ -119,9 +127,29 @@ public class GameModel {
         this.blackMoves = snap.blackMovesSnap;
         this.redCaptures = snap.redCapturesSnap;
         this.blackCaptures = snap.blackCapturesSnap;
+        this.moveLog = new ArrayList<>(snap.moveLogSnapshot); // Khôi phục lại nhật ký log nước đi cũ
 
         clearSelection();
         return true;
+    }
+
+    // ── PHẦN PHÁT TRIỂN-23130072-Dũng
+    // Thuật toán chuyển đổi dữ liệu tọa độ (Row, Col) sang Hệ tọa độ Đại số (a1 -> h8)
+    private String generateNotation(Move m, boolean isRed) {
+        char startCol = (char) ('a' + m.getFromCol());
+        char endCol   = (char) ('a' + m.getToCol());
+
+        // Mảng 2D dòng 0 ở trên cùng màn hình tương ứng với hàng 8 của bàn cờ thực tế
+        int startRow = 8 - m.getFromRow();
+        int endRow   = 8 - m.getToRow();
+
+        String startSq = startCol + String.valueOf(startRow);
+        String endSq   = endCol + String.valueOf(endRow);
+
+        String emoji = isRed ? "🔴" : "⚫";
+        String separator = m.isCapture() ? " x " : " - ";
+
+        return emoji + " " + startSq + separator + endSq;
     }
 
     public boolean canUndo() {
@@ -153,6 +181,8 @@ public class GameModel {
     public int getBlackMoves()    { return blackMoves; }
     public int getRedCaptures()   { return redCaptures; }
     public int getBlackCaptures() { return blackCaptures; }
+
+    public List<String> getMoveLog() { return moveLog; } // Getter lấy danh sách log nước đi
 
     public String getElapsedTime() {
         long elapsed = (System.currentTimeMillis() - startTime) / 1000;

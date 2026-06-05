@@ -157,7 +157,7 @@ public class GameController {
         String winner = redWins ? "ĐỎ" : "ĐEN";
         Color winColor = redWins ? new Color(200, 40, 40) : new Color(40, 40, 40);
         String emoji = redWins ? "🔴" : "⚫";
-
+        String reason = model.getEndReasonText();
         Timer t = new Timer(300, e -> {
             // ── Panel chính ──
             JPanel panel = new JPanel();
@@ -175,7 +175,15 @@ public class GameController {
             titleLbl.setAlignmentX(Component.CENTER_ALIGNMENT);
             panel.add(titleLbl);
             panel.add(Box.createVerticalStrut(16));
-
+            //UC11 - Hiển thị lý do kết thúc ván đấu (nếu có)
+            if (reason != null && !reason.isEmpty()) {
+                JLabel reasonLbl = new JLabel("Lý do: " + reason, SwingConstants.CENTER);
+                reasonLbl.setFont(new Font("SansSerif", Font.PLAIN, 14));
+                reasonLbl.setForeground(new Color(80, 60, 20));
+                reasonLbl.setAlignmentX(Component.CENTER_ALIGNMENT);
+                panel.add(reasonLbl);
+                panel.add(Box.createVerticalStrut(12));
+            }
             // Đường kẻ ngang
             JSeparator sep = new JSeparator();
             sep.setForeground(new Color(180, 160, 120));

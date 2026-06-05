@@ -8,6 +8,7 @@ public class GameModel {
     public enum Mode   { PVP, PV_AI }
     public enum Status { PLAYING, RED_WINS, BLACK_WINS }
     public enum Diff   { EASY, MEDIUM, HARD }
+    public enum EndReason {NONE, RED_NO_VALID_MOVES, BLACK_NO_VALID_MOVES}
 
     // ── PHẦN PHÁT TRIỂN-23130072-Dũng
     // Cấu trúc Snapshot để chụp lại khoảnh khắc của bàn cờ trước mỗi nước đi
@@ -44,6 +45,7 @@ public class GameModel {
     private int redCaptures = 0;
     private int blackCaptures = 0;
     private long startTime;
+    private EndReason endReason = EndReason.NONE;
 
     public void newGame(Mode mode, Diff diff) {
         this.mode   = mode;
@@ -54,7 +56,7 @@ public class GameModel {
         this.selected = null;
         this.selMoves = new ArrayList<>();
         this.ai = (mode == Mode.PV_AI) ? new AIPlayer(diff) : null;
-
+        this.endReason = EndReason.NONE;
         // Reset dữ liệu thống kê & Lịch sử
         this.undoStack.clear();
         this.redMoves      = 0;
@@ -112,6 +114,7 @@ public class GameModel {
         this.board = snap.boardSnapshot;
         this.redTurn = snap.redTurnSnapshot;
         this.status = snap.statusSnapshot;
+        this.endReason = EndReason.NONE;
         this.redMoves = snap.redMovesSnap;
         this.blackMoves = snap.blackMovesSnap;
         this.redCaptures = snap.redCapturesSnap;
@@ -124,14 +127,27 @@ public class GameModel {
     public boolean canUndo() {
         return !undoStack.isEmpty(); }
     private void checkWin() {
-        if (board.validMoves(true).isEmpty())  status = Status.BLACK_WINS;
-        if (board.validMoves(false).isEmpty()) status = Status.RED_WINS;
+        endReason = EndReason.NONE;
+
+        if (hasNoValidMoves(true)) {
+            status = Status.BLACK_WINS;
+            endReason = EndReason.RED_NO_VALID_MOVES;
+            return;
+        }
+
+        if (hasNoValidMoves(false)) {
+            status = Status.RED_WINS;
+            endReason = EndReason.BLACK_NO_VALID_MOVES;
+        }
     }
 
     public void clearSelection() { selected=null; selMoves=new ArrayList<>(); }
 
     public Move getAIMove() { return (ai!=null) ? ai.best(board, redTurn) : null; }
-    
+    //UC11: Kiểm tra xem bên isRed có còn nước đi hợp lệ nào không
+    public boolean hasNoValidMoves(boolean isRed) {
+        return board != null && board.hasNoValidMoves(isRed);
+    }
     //  UC12: Getters thống kê
     public int getRedMoves()      { return redMoves; }
     public int getBlackMoves()    { return blackMoves; }
@@ -154,4 +170,16 @@ public class GameModel {
     public List<Move> getSelMoves() { return selMoves; }
     public int redCount()  { return board==null?0:board.count(true);  }
     public int blackCount(){ return board==null?0:board.count(false); }
+    public EndReason getEndReason() {return endReason;}
+
+    public String getEndReasonText() {
+        switch (endReason) {
+            case RED_NO_VALID_MOVES:
+                return "Đỏ không còn nước đi hợp lệ.";
+            case BLACK_NO_VALID_MOVES:
+                return "Đen không còn nước đi hợp lệ.";
+            default:
+                return "";
+        }
+    }
 }

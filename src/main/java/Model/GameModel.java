@@ -42,12 +42,14 @@ public class GameModel {
     private List<Move> selMoves = new ArrayList<>();
     private AIPlayer ai;
 
-    // Các biến phục vụ thống kê ván đấu
-    private int redMoves = 0;
-    private int blackMoves = 0;
-    private int redCaptures = 0;
-    private int blackCaptures = 0;
-    private long startTime;
+    // ── UC12: Các biến tích lũy thống kê ván đấu ──
+    // Được cập nhật trong applyMove() sau mỗi nước đi và đọc bởi
+    // GameController.checkGameOver() khi xây dựng dialog kết quả.
+    private int redMoves = 0;      // UC12: Tổng số nước đi của bên Đỏ
+    private int blackMoves = 0;    // UC12: Tổng số nước đi của bên Đen
+    private int redCaptures = 0;   // UC12: Tổng quân ăn được của bên Đỏ
+    private int blackCaptures = 0; // UC12: Tổng quân ăn được của bên Đen
+    private long startTime;        // UC12: Thời điểm bắt đầu ván (ms) để tính thời gian thi đấu
     private EndReason endReason = EndReason.NONE;
 
     public void newGame(Mode mode, Diff diff) {
@@ -60,14 +62,14 @@ public class GameModel {
         this.selMoves = new ArrayList<>();
         this.ai = (mode == Mode.PV_AI) ? new AIPlayer(diff) : null;
         this.endReason = EndReason.NONE;
-        // Reset dữ liệu thống kê & Lịch sử
+        // UC12: Reset toàn bộ bộ đếm thống kê khi bắt đầu ván mới
         this.undoStack.clear();
         this.moveLog.clear(); // ── PHẦN PHÁT TRIỂN-23130072-Dũng: Xóa trắng log khi sang ván mới
         this.redMoves      = 0;
         this.blackMoves    = 0;
         this.redCaptures   = 0;
         this.blackCaptures = 0;
-        this.startTime     = System.currentTimeMillis();
+        this.startTime     = System.currentTimeMillis(); // UC12: Ghi nhận mốc thời gian khởi đầu ván
     }
 
     /** Chọn quân tại (r,c). Trả về true nếu chọn được. */
@@ -97,20 +99,22 @@ public class GameModel {
         String notation = generateNotation(m, redTurn);
         moveLog.add(notation);
 
-        // Cập nhật thống kê nước đi
+        // ── UC12: Tích lũy thống kê nước đi sau mỗi lần applyMove ──
+        // Số liệu này sẽ được đọc bởi getRedMoves(), getBlackMoves(),
+        // getRedCaptures(), getBlackCaptures() khi dialog UC12 được dựng lên.
         int captured = (m.getCaptures() != null) ? m.getCaptures().size() : 0;
         if (redTurn) {
-            redMoves++;
-            redCaptures += captured;
+            redMoves++;            // UC12: Ghi nhận 1 nước đi của Đỏ
+            redCaptures += captured; // UC12: Cộng dồn quân Đỏ ăn được
         } else {
-            blackMoves++;
-            blackCaptures += captured;
+            blackMoves++;            // UC12: Ghi nhận 1 nước đi của Đen
+            blackCaptures += captured; // UC12: Cộng dồn quân Đen ăn được
         }
 
         board.applyMove(m);
         clearSelection();
         redTurn = !redTurn;
-        checkWin();
+        checkWin(); // UC12: Sau mỗi nước đi → kiểm tra điều kiện thắng/thua
     }
 
     // ── PHẦN PHÁT TRIỂN-23130072-Dũng
@@ -154,15 +158,24 @@ public class GameModel {
 
     public boolean canUndo() {
         return !undoStack.isEmpty(); }
+
+    /**
+     * UC12 [Bước hỗ trợ – checkWin]: Sau mỗi nước đi, kiểm tra xem
+     * có bên nào hết nước đi hợp lệ không. Nếu có → cập nhật Status
+     * và EndReason để GameController.checkGameOver() đọc và hiển thị
+     * dialog kết quả UC12.
+     */
     private void checkWin() {
         endReason = EndReason.NONE;
 
+        // UC12: Kiểm tra bên Đỏ còn nước đi không; nếu không → Đen thắng
         if (hasNoValidMoves(true)) {
             status = Status.BLACK_WINS;
             endReason = EndReason.RED_NO_VALID_MOVES;
             return;
         }
 
+        // UC12: Kiểm tra bên Đen còn nước đi không; nếu không → Đỏ thắng
         if (hasNoValidMoves(false)) {
             status = Status.RED_WINS;
             endReason = EndReason.BLACK_NO_VALID_MOVES;
@@ -172,18 +185,34 @@ public class GameModel {
     public void clearSelection() { selected=null; selMoves=new ArrayList<>(); }
 
     public Move getAIMove() { return (ai!=null) ? ai.best(board, redTurn) : null; }
+
     //UC11: Kiểm tra xem bên isRed có còn nước đi hợp lệ nào không
     public boolean hasNoValidMoves(boolean isRed) {
         return board != null && board.hasNoValidMoves(isRed);
     }
-    //  UC12: Getters thống kê
+
+    // ── UC12: Các getter thống kê ─────────────────────────────────────
+    // Được gọi bởi GameController.checkGameOver() để điền vào bảng
+    // thống kê trong dialog thông báo kết quả UC12.
+
+    /** UC12: Trả về tổng số nước đi của bên Đỏ trong ván. */
     public int getRedMoves()      { return redMoves; }
+
+    /** UC12: Trả về tổng số nước đi của bên Đen trong ván. */
     public int getBlackMoves()    { return blackMoves; }
+
+    /** UC12: Trả về số quân bên Đỏ đã ăn được trong ván. */
     public int getRedCaptures()   { return redCaptures; }
+
+    /** UC12: Trả về số quân bên Đen đã ăn được trong ván. */
     public int getBlackCaptures() { return blackCaptures; }
 
     public List<String> getMoveLog() { return moveLog; } // Getter lấy danh sách log nước đi
 
+    /**
+     * UC12: Tính và trả về chuỗi thời gian thi đấu định dạng "MM:SS".
+     * Được gọi khi dựng bảng thống kê trong dialog kết quả.
+     */
     public String getElapsedTime() {
         long elapsed = (System.currentTimeMillis() - startTime) / 1000;
         long min = elapsed / 60;
@@ -191,7 +220,7 @@ public class GameModel {
         return String.format("%02d:%02d", min, sec);
     }
 
-    //  Getters 
+    //  Getters
     public Board  getBoard()    { return board; }
     public Status getStatus()   { return status; }
     public Mode   getMode()     { return mode; }
@@ -202,6 +231,11 @@ public class GameModel {
     public int blackCount(){ return board==null?0:board.count(false); }
     public EndReason getEndReason() {return endReason;}
 
+    /**
+     * UC12: Trả về chuỗi mô tả lý do kết thúc ván đấu.
+     * Được đọc bởi GameController.checkGameOver() để hiển thị
+     * dòng "Lý do: ..." trong dialog thông báo kết quả.
+     */
     public String getEndReasonText() {
         switch (endReason) {
             case RED_NO_VALID_MOVES:

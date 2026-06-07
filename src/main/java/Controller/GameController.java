@@ -54,6 +54,8 @@ public class GameController {
             boolean moved = model.moveTo(row, col);
             frame.refresh(model);
             if (moved) {
+                // ── UC12 [Bước 1]: Sau mỗi nước đi hợp lệ, kiểm tra ngay xem ván đấu
+                //    đã kết thúc chưa. Nếu có → kích hoạt luồng thông báo kết quả.
                 checkGameOver();
                 scheduleAI();
 
@@ -113,6 +115,8 @@ public class GameController {
             model.applyMove(m);
             frame.refresh(model);
 
+            // ── UC12 [Bước 1 – phía AI]: Sau khi animation nước đi AI kết thúc,
+            //    kiểm tra kết thúc ván để có thể hiển thị thông báo kết quả.
             checkGameOver();
             scheduleAI();
 
@@ -149,17 +153,33 @@ public class GameController {
         t.setRepeats(false); t.start();
     }
 
+    // ═══════════════════════════════════════════════════════════════════
+    // UC12 – THÔNG BÁO KẾT QUẢ ĐÃ CHỌN PHÁT TRIỂN TIẾP
+    // ═══════════════════════════════════════════════════════════════════
+    /**
+     * UC12 [Bước 1] – GameController gọi hàm này ngay sau mỗi nước đi.
+     *   Truy vấn GameModel.getStatus() để biết trạng thái ván đấu.
+     *   Nếu vẫn PLAYING → thoát ngay, không làm gì thêm.
+     *   Nếu RED_WINS hoặc BLACK_WINS → tiến hành xây dựng và hiển thị
+     *   dialog thông báo kết quả (UC12 Bước 2 → Bước 6).
+     */
     private void checkGameOver() {
         GameModel.Status st = model.getStatus();
-        if (st == GameModel.Status.PLAYING) return;
+        if (st == GameModel.Status.PLAYING) return; // UC12: Ván chưa kết thúc → bỏ qua
 
+        // ── UC12 [Bước 2]: Xác định người thắng và chuẩn bị dữ liệu hiển thị ──
         boolean redWins = (st == GameModel.Status.RED_WINS);
         String winner = redWins ? "ĐỎ" : "ĐEN";
         Color winColor = redWins ? new Color(200, 40, 40) : new Color(40, 40, 40);
         String emoji = redWins ? "🔴" : "⚫";
+        // UC12 [Bước 2a]: Lấy lý do kết thúc ván (hết nước đi...) từ GameModel
         String reason = model.getEndReasonText();
+
+        // ── UC12 [Bước 3]: Trì hoãn 300ms sau nước đi cuối để người chơi
+        //    kịp nhìn thấy bàn cờ trước khi dialog bật lên ──
         Timer t = new Timer(300, e -> {
-            // ── Panel chính ──
+
+            // ── UC12 [Bước 4]: Xây dựng giao diện Panel chính của dialog ──
             JPanel panel = new JPanel();
             panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
             panel.setBackground(new Color(245, 240, 230));
@@ -168,14 +188,16 @@ public class GameController {
                     BorderFactory.createEmptyBorder(20, 30, 20, 30)
             ));
 
-            // Tiêu đề người thắng
+            // UC12 [Bước 4a]: Dòng tiêu đề lớn thông báo bên thắng cuộc
             JLabel titleLbl = new JLabel(emoji + "  " + winner + " THẮNG!  " + emoji, SwingConstants.CENTER);
             titleLbl.setFont(new Font("SansSerif", Font.BOLD, 28));
             titleLbl.setForeground(winColor);
             titleLbl.setAlignmentX(Component.CENTER_ALIGNMENT);
             panel.add(titleLbl);
             panel.add(Box.createVerticalStrut(16));
-            //UC11 - Hiển thị lý do kết thúc ván đấu (nếu có)
+
+            // UC12 [Bước 4b]: Hiển thị lý do kết thúc ván đấu (nếu có)
+            //   → Lấy từ GameModel.getEndReasonText() (đã truy vấn ở Bước 2a)
             if (reason != null && !reason.isEmpty()) {
                 JLabel reasonLbl = new JLabel("Lý do: " + reason, SwingConstants.CENTER);
                 reasonLbl.setFont(new Font("SansSerif", Font.PLAIN, 14));
@@ -184,14 +206,17 @@ public class GameController {
                 panel.add(reasonLbl);
                 panel.add(Box.createVerticalStrut(12));
             }
-            // Đường kẻ ngang
+
+            // Đường kẻ ngang phân cách vùng kết quả và thống kê
             JSeparator sep = new JSeparator();
             sep.setForeground(new Color(180, 160, 120));
             sep.setMaximumSize(new Dimension(Integer.MAX_VALUE, 2));
             panel.add(sep);
             panel.add(Box.createVerticalStrut(12));
 
-            // Thống kê
+            // UC12 [Bước 4c]: Khu vực thống kê ván đấu
+            //   → Gọi GameModel.getElapsedTime(), getRedMoves(), getBlackMoves(),
+            //      getRedCaptures(), getBlackCaptures() để điền số liệu
             JLabel statsTitle = new JLabel("📊  THỐNG KÊ VÁN ĐẤU", SwingConstants.CENTER);
             statsTitle.setFont(new Font("SansSerif", Font.BOLD, 14));
             statsTitle.setForeground(new Color(80, 60, 20));
@@ -199,11 +224,12 @@ public class GameController {
             panel.add(statsTitle);
             panel.add(Box.createVerticalStrut(10));
 
-            // Bảng thống kê dạng lưới
+            // Bảng thống kê dạng lưới 3 hàng × 2 cột
             JPanel statsGrid = new JPanel(new GridLayout(3, 2, 8, 6));
             statsGrid.setBackground(new Color(245, 240, 230));
             statsGrid.setAlignmentX(Component.CENTER_ALIGNMENT);
 
+            // UC12: Điền từng dòng thống kê vào lưới
             addStatRow(statsGrid, "⏱  Thời gian",   model.getElapsedTime(), "", "");
             addStatRow(statsGrid, "🔴 Đỏ — Nước đi: " + model.getRedMoves(), "Quân ăn: " + model.getRedCaptures(), "", "");
             addStatRow(statsGrid, "⚫ Đen — Nước đi: " + model.getBlackMoves(), "Quân ăn: " + model.getBlackCaptures(), "", "");
@@ -211,7 +237,10 @@ public class GameController {
             panel.add(statsGrid);
             panel.add(Box.createVerticalStrut(20));
 
-            // Nút bấm
+            // ── UC12 [Bước 5]: Tạo các nút hành động cho người chơi lựa chọn ──
+            //   Người chơi có 2 lựa chọn sau khi đọc kết quả:
+            //     (A) "Chơi lại"  → bắt đầu ván mới với cùng cấu hình
+            //     (B) "Menu"      → quay về màn hình chọn chế độ chơi
             JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 16, 0));
             btnPanel.setBackground(new Color(245, 240, 230));
 
@@ -222,7 +251,8 @@ public class GameController {
             btnPanel.add(menuBtnDialog);
             panel.add(btnPanel);
 
-            // Tạo dialog
+            // ── UC12 [Bước 6]: Tạo và hiển thị JDialog modal ──
+            //   Dialog được đặt giữa màn hình, chặn tương tác bàn cờ phía sau (modal=true)
             JDialog dialog = new JDialog(frame, "Kết thúc ván", true);
             dialog.setUndecorated(false);
             dialog.getContentPane().add(panel);
@@ -230,14 +260,23 @@ public class GameController {
             dialog.setLocationRelativeTo(frame);
             dialog.setResizable(false);
 
+            // UC12 [Bước 6a]: Xử lý khi người chơi bấm "Chơi lại"
+            //   → Đóng dialog, gọi startGame() khởi tạo ván mới ngay lập tức
             playAgainBtn.addActionListener(ae -> { dialog.dispose(); startGame(lastMode, lastDiff); });
+
+            // UC12 [Bước 6b]: Xử lý khi người chơi bấm "Menu"
+            //   → Đóng dialog, gọi frame.showMenu() quay về màn hình chính
             menuBtnDialog.addActionListener(ae -> { dialog.dispose(); frame.showMenu(); });
 
+            // UC12 [Bước 6c]: Hiển thị dialog (blocking – chờ người chơi chọn)
             dialog.setVisible(true);
         });
         t.setRepeats(false);
         t.start();
     }
+    // ═══════════════════════════════════════════════════════════════════
+    // KẾT THÚC UC12
+    // ═══════════════════════════════════════════════════════════════════
 
     // Helper: tạo 1 hàng thống kê (label trái + value phải)
     private void addStatRow(JPanel grid, String left, String right,

@@ -5,6 +5,11 @@ import View.MainFrame;
 import javax.swing.*;
 import java.awt.*;
 
+/**
+ * UC12 – THÔNG BÁO KẾT QUẢ
+ * Luồng chính: Bước 1 (nhận nước đi) → Bước 2 (kiểm tra kết thúc)
+ *            → Bước 3 (hiển thị kết quả) → Bước 4 (người chơi chọn hành động)
+ */
 public class GameController {
     private final GameModel model = new GameModel();
     private MainFrame frame;
@@ -16,34 +21,31 @@ public class GameController {
         frame.getMenu().setOnStart(this::startGame);
         frame.getBoard().setClickListener(this::handleClick);
         frame.getMenuBtn().addActionListener(e -> frame.showMenu());
-
-        // Lắng nghe sự kiện nút Hoàn tác
         frame.getUndoBtn().addActionListener(e -> handleUndo());
-
         frame.showMenu();
         frame.setVisible(true);
     }
 
+    // UC12 - Bước 4: khởi tạo ván mới khi người chơi chọn "Chơi lại"
     private void startGame(GameModel.Mode mode, GameModel.Diff diff) {
-        lastMode = mode; lastDiff = diff;
+        lastMode = mode;
+        lastDiff = diff;
         model.newGame(mode, diff);
         frame.refresh(model);
         frame.showGame();
-
         tryAutoSelectUniquePiece();
     }
 
+    // UC12 - Bước 1: nhận nước đi từ người chơi, cập nhật bàn cờ và kiểm tra kết thúc ván
     private void handleClick(int row, int col) {
         if (model.getStatus() != GameModel.Status.PLAYING) return;
         if (model.getMode() == GameModel.Mode.PV_AI && !model.isRedTurn()) return;
-
         if (row < 0 || row >= 8 || col < 0 || col >= 8) return;
 
-        Model.Piece clickedPiece = model.getBoard().get(row, col);
+        Model.Piece clickedPiece  = model.getBoard().get(row, col);
         Model.Piece selectedPiece = model.getSelected();
 
-        // PHẦN PHÁT TRIỂN TIẾP - MSSV: 23130141 - Họ tên: Nguyễn Tuấn Kha
-        // Hủy chọn khi click lại chính quân cờ đang chọn
+        // Hủy chọn khi click lại chính quân đang chọn
         if (selectedPiece != null && selectedPiece.getRow() == row && selectedPiece.getCol() == col) {
             model.clearSelection();
             frame.refresh(model);
@@ -51,14 +53,11 @@ public class GameController {
         }
 
         if (selectedPiece != null) {
-            boolean moved = model.moveTo(row, col);
-            frame.refresh(model);
+            boolean moved = model.moveTo(row, col); // UC12 - Bước 1: thực hiện nước đi của người chơi
+            frame.refresh(model);                   // UC12 - Bước 1: cập nhật giao diện sau nước đi
             if (moved) {
-                checkGameOver();
+                checkGameOver();                    // UC12 - Bước 1: kiểm tra ván có kết thúc không
                 scheduleAI();
-
-                // PHẦN PHÁT TRIỂN TIẾP - MSSV: 23130141 - Họ tên: Nguyễn Tuấn Kha
-                // Tự chọn quân cờ duy nhất cho người tiếp theo
                 tryAutoSelectUniquePiece();
                 return;
             }
@@ -66,70 +65,55 @@ public class GameController {
 
         boolean success = model.select(row, col);
 
-        // PHẦN PHÁT TRIỂN TIẾP - MSSV: 23130141 - Họ tên: Nguyễn Tuấn Kha
-        // Xử lý các luồng ngoại lệ khi chọn quân cờ không thành công
+        // Thông báo lỗi khi chọn quân không hợp lệ
         if (!success) {
             if (clickedPiece != null) {
-                // Click trúng quân cờ của đối thủ
                 if (clickedPiece.isRed() != model.isRedTurn()) {
                     JOptionPane.showMessageDialog(frame,
                             "Không thể lựa chọn quân cờ này! Đây là quân cờ của đối thủ.",
-                            "Chọn sai quân cờ",
-                            JOptionPane.ERROR_MESSAGE);
-                }
-                //Click vào quân vi phạm luật ăn bắt buộc
-                else {
+                            "Chọn sai quân cờ", JOptionPane.ERROR_MESSAGE);
+                } else {
                     java.util.List<Model.Move> allMoves = model.getBoard().validMoves(model.isRedTurn());
                     boolean hasCapture = allMoves.stream().anyMatch(Model.Move::isCapture);
-
                     if (hasCapture) {
-                        // Hiển thị hộp thoại cảnh báo người chơi
                         JOptionPane.showMessageDialog(frame,
                                 "Bạn không thể chọn quân này! Bắt buộc phải thực hiện nước ăn quân.",
-                                "Chọn quân sai luật",
-                                JOptionPane.WARNING_MESSAGE);
+                                "Chọn quân sai luật", JOptionPane.WARNING_MESSAGE);
                     }
                 }
             }
         }
-        // =========================================================================
 
         frame.refresh(model);
     }
 
-    //  Hàm điều phối chạy Animation rồi mới áp dụng logic Model
+    // UC12 - Bước 1: nhận nước đi từ AI (kèm hoạt ảnh), cập nhật bàn cờ và kiểm tra kết thúc ván
     private void executeMoveWithAnimation(Move m) {
         Piece activePiece = model.getBoard().get(m.getFromRow(), m.getFromCol());
         if (activePiece == null) return;
 
-        boolean isRed = activePiece.isRed();
+        boolean isRed  = activePiece.isRed();
         boolean isKing = activePiece.isKing();
 
         model.clearSelection();
         frame.refresh(model);
 
-        // Gọi lệnh chạy chuyển động đồ họa từ BoardPanel
         frame.getBoard().startAnimation(m, isRed, isKing, () -> {
-            model.applyMove(m);
-            frame.refresh(model);
-
-            checkGameOver();
+            model.applyMove(m);   // UC12 - Bước 1: thực hiện nước đi của AI
+            frame.refresh(model); // UC12 - Bước 1: cập nhật giao diện sau nước đi
+            checkGameOver();      // UC12 - Bước 1: kiểm tra ván có kết thúc không
             scheduleAI();
-
             tryAutoSelectUniquePiece();
         });
     }
 
-    //  Hàm xử lý logic Hoàn tác (Tự động lùi 2 lượt nếu đánh với AI)
     private void handleUndo() {
-        if (frame.getBoard().isAnimating()) return; // Tuyệt đối không cho bấm khi đang bay quân
-
+        if (frame.getBoard().isAnimating()) return;
         if (model.undo()) {
             if (model.getMode() == GameModel.Mode.PV_AI && !model.isRedTurn()) {
-                model.undo(); // Lùi tiếp lượt của AI để trả sân cho người chơi
+                model.undo();
             }
             frame.refresh(model);
-
             tryAutoSelectUniquePiece();
         }
     }
@@ -137,45 +121,47 @@ public class GameController {
     private void scheduleAI() {
         if (model.getMode() != GameModel.Mode.PV_AI) return;
         if (model.isRedTurn() || model.getStatus() != GameModel.Status.PLAYING) return;
-
-        // Giảm xuống 400ms để cân bằng với thời gian chạy Animation
         Timer t = new Timer(400, e -> {
             Move aiMove = model.getAIMove();
-            if (aiMove != null) {
-                // Áp dụng animation mượt mà cho cả nước đi của AI tính toán
-                executeMoveWithAnimation(aiMove);
-            }
+            if (aiMove != null) executeMoveWithAnimation(aiMove);
         });
-        t.setRepeats(false); t.start();
+        t.setRepeats(false);
+        t.start();
     }
 
+    // UC12 - Bước 2, 3, 4: kiểm tra trạng thái ván, hiển thị kết quả và xử lý lựa chọn của người chơi
     private void checkGameOver() {
-        GameModel.Status st = model.getStatus();
-        if (st == GameModel.Status.PLAYING) return;
 
-        boolean redWins = (st == GameModel.Status.RED_WINS);
-        String winner = redWins ? "ĐỎ" : "ĐEN";
-        Color winColor = redWins ? new Color(200, 40, 40) : new Color(40, 40, 40);
-        String emoji = redWins ? "🔴" : "⚫";
-        String reason = model.getEndReasonText();
+        // UC12 - Bước 2: lấy trạng thái ván từ model
+        GameModel.Status st = model.getStatus();
+        if (st == GameModel.Status.PLAYING) return; // ván chưa kết thúc → thoát
+
+        // UC12 - Bước 2: xác định người thắng và thu thập thống kê ván đấu
+        boolean redWins  = (st == GameModel.Status.RED_WINS);
+        String  winner   = redWins ? "ĐỎ" : "ĐEN";
+        Color   winColor = redWins ? new Color(200, 40, 40) : new Color(40, 40, 40);
+        String  emoji    = redWins ? "🔴" : "⚫";
+        String  reason   = model.getEndReasonText();
+
+        // UC12 - Bước 3: trì hoãn 300ms rồi hiển thị hộp thoại kết quả
         Timer t = new Timer(300, e -> {
-            // ── Panel chính ──
+
             JPanel panel = new JPanel();
             panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
             panel.setBackground(new Color(245, 240, 230));
             panel.setBorder(BorderFactory.createCompoundBorder(
                     BorderFactory.createLineBorder(winColor, 3, true),
-                    BorderFactory.createEmptyBorder(20, 30, 20, 30)
-            ));
+                    BorderFactory.createEmptyBorder(20, 30, 20, 30)));
 
-            // Tiêu đề người thắng
+            // UC12 - Bước 3: hiển thị tiêu đề thắng cuộc
             JLabel titleLbl = new JLabel(emoji + "  " + winner + " THẮNG!  " + emoji, SwingConstants.CENTER);
             titleLbl.setFont(new Font("SansSerif", Font.BOLD, 28));
             titleLbl.setForeground(winColor);
             titleLbl.setAlignmentX(Component.CENTER_ALIGNMENT);
             panel.add(titleLbl);
             panel.add(Box.createVerticalStrut(16));
-            //UC11 - Hiển thị lý do kết thúc ván đấu (nếu có)
+
+            // UC12 - Bước 3: hiển thị lý do kết thúc ván
             if (reason != null && !reason.isEmpty()) {
                 JLabel reasonLbl = new JLabel("Lý do: " + reason, SwingConstants.CENTER);
                 reasonLbl.setFont(new Font("SansSerif", Font.PLAIN, 14));
@@ -184,14 +170,14 @@ public class GameController {
                 panel.add(reasonLbl);
                 panel.add(Box.createVerticalStrut(12));
             }
-            // Đường kẻ ngang
+
             JSeparator sep = new JSeparator();
             sep.setForeground(new Color(180, 160, 120));
             sep.setMaximumSize(new Dimension(Integer.MAX_VALUE, 2));
             panel.add(sep);
             panel.add(Box.createVerticalStrut(12));
 
-            // Thống kê
+            // UC12 - Bước 3: hiển thị bảng thống kê ván đấu (thời gian, số nước đi, số quân ăn)
             JLabel statsTitle = new JLabel("📊  THỐNG KÊ VÁN ĐẤU", SwingConstants.CENTER);
             statsTitle.setFont(new Font("SansSerif", Font.BOLD, 14));
             statsTitle.setForeground(new Color(80, 60, 20));
@@ -199,39 +185,41 @@ public class GameController {
             panel.add(statsTitle);
             panel.add(Box.createVerticalStrut(10));
 
-            // Bảng thống kê dạng lưới
             JPanel statsGrid = new JPanel(new GridLayout(3, 2, 8, 6));
             statsGrid.setBackground(new Color(245, 240, 230));
             statsGrid.setAlignmentX(Component.CENTER_ALIGNMENT);
-
-            addStatRow(statsGrid, "⏱  Thời gian",   model.getElapsedTime(), "", "");
-            addStatRow(statsGrid, "🔴 Đỏ — Nước đi: " + model.getRedMoves(), "Quân ăn: " + model.getRedCaptures(), "", "");
+            addStatRow(statsGrid, "⏱  Thời gian",              model.getElapsedTime(), "", "");
+            addStatRow(statsGrid, "🔴 Đỏ — Nước đi: "  + model.getRedMoves(),   "Quân ăn: " + model.getRedCaptures(),   "", "");
             addStatRow(statsGrid, "⚫ Đen — Nước đi: " + model.getBlackMoves(), "Quân ăn: " + model.getBlackCaptures(), "", "");
-
             panel.add(statsGrid);
             panel.add(Box.createVerticalStrut(20));
 
-            // Nút bấm
+            // UC12 - Bước 3: hiển thị nút [Chơi lại] và [Menu]
             JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 16, 0));
             btnPanel.setBackground(new Color(245, 240, 230));
-
-            JButton playAgainBtn = makeButton("▶  Chơi lại", new Color(50, 130, 50));
-            JButton menuBtnDialog = makeButton("◀  Menu",    new Color(80, 80, 160));
-
+            JButton playAgainBtn  = makeButton("▶  Chơi lại", new Color(50, 130, 50));
+            JButton menuBtnDialog = makeButton("◀  Menu",     new Color(80, 80, 160));
             btnPanel.add(playAgainBtn);
             btnPanel.add(menuBtnDialog);
             panel.add(btnPanel);
 
-            // Tạo dialog
             JDialog dialog = new JDialog(frame, "Kết thúc ván", true);
-            dialog.setUndecorated(false);
             dialog.getContentPane().add(panel);
             dialog.pack();
             dialog.setLocationRelativeTo(frame);
             dialog.setResizable(false);
 
-            playAgainBtn.addActionListener(ae -> { dialog.dispose(); startGame(lastMode, lastDiff); });
-            menuBtnDialog.addActionListener(ae -> { dialog.dispose(); frame.showMenu(); });
+            // UC12 - Bước 4: người chơi chọn "Chơi lại" → khởi tạo ván mới
+            playAgainBtn.addActionListener(ae -> {
+                dialog.dispose();
+                startGame(lastMode, lastDiff);
+            });
+
+            // UC12 - Bước 4: người chơi chọn "Menu" → trở về màn hình menu
+            menuBtnDialog.addActionListener(ae -> {
+                dialog.dispose();
+                frame.showMenu();
+            });
 
             dialog.setVisible(true);
         });
@@ -239,22 +227,17 @@ public class GameController {
         t.start();
     }
 
-    // Helper: tạo 1 hàng thống kê (label trái + value phải)
-    private void addStatRow(JPanel grid, String left, String right,
-                            String unused1, String unused2) {
+    private void addStatRow(JPanel grid, String left, String right, String unused1, String unused2) {
         JLabel l = new JLabel(left);
         l.setFont(new Font("SansSerif", Font.PLAIN, 13));
         l.setForeground(new Color(60, 50, 30));
-
         JLabel r = new JLabel(right, SwingConstants.RIGHT);
         r.setFont(new Font("SansSerif", Font.BOLD, 13));
         r.setForeground(new Color(60, 50, 30));
-
         grid.add(l);
         grid.add(r);
     }
 
-    // Helper: tạo nút bấm có màu tùy chỉnh
     private JButton makeButton(String text, Color bg) {
         JButton btn = new JButton(text);
         btn.setFont(new Font("SansSerif", Font.BOLD, 14));
@@ -263,13 +246,11 @@ public class GameController {
         btn.setFocusPainted(false);
         btn.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createLineBorder(bg.darker(), 1, true),
-                BorderFactory.createEmptyBorder(8, 20, 8, 20)
-        ));
+                BorderFactory.createEmptyBorder(8, 20, 8, 20)));
         return btn;
     }
 
-    // PHẦN PHÁT TRIỂN TIẾP - MSSV: 23130141 - Họ tên: Nguyễn Tuấn Kha
-    // Tự động chọn quân cờ nếu lượt đó chỉ có duy nhất 1 quân đi được
+    // Tự động chọn quân nếu lượt đó chỉ có duy nhất một quân có thể đi
     private void tryAutoSelectUniquePiece() {
         if (model.getStatus() != GameModel.Status.PLAYING) return;
         if (model.getMode() == GameModel.Mode.PV_AI && !model.isRedTurn()) return;

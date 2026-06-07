@@ -175,7 +175,7 @@ public class GameController {
             titleLbl.setAlignmentX(Component.CENTER_ALIGNMENT);
             panel.add(titleLbl);
             panel.add(Box.createVerticalStrut(16));
-            //UC11 - Hiển thị lý do kết thúc ván đấu (nếu có)
+            //UC11 - Nguyễn Thiên Phước Hiển thị lý do kết thúc ván đấu (nếu hết nước đi hợp lệ)
             if (reason != null && !reason.isEmpty()) {
                 JLabel reasonLbl = new JLabel("Lý do: " + reason, SwingConstants.CENTER);
                 reasonLbl.setFont(new Font("SansSerif", Font.PLAIN, 14));
